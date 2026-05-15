@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  BRANCH_MANAGER
+  ADMIN
+  SALES
+  TECHNICIAN
+  FINANCE
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeadSource {
+  FACEBOOK
+  GOOGLE
+  REFERRAL
+  WEBSITE
+  WALK_IN
+  COLD_CALL
+  OTHER
+}
+
+enum LeadStage {
+  NEW_LEAD
+  CONTACTED
+  SITE_INSPECTION
+  QUOTATION_SENT
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum QuotationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum PricingType {
+  FIXED
+  PER_SQFT
+  PER_UNIT
+  PER_VISIT
+  PACKAGE
+}
+
+enum JobStatus {
+  SCHEDULED
+  EN_ROUTE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum JobPriority {
+  LOW
+  NORMAL
+  HIGH
+  EMERGENCY
+}
+
+enum RecurringFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  BIANNUALLY
+  ANNUALLY
+}
+
+enum ActivityType {
+  INQUIRY
+  INSPECTION
+  QUOTATION
+  SERVICE_VISIT
+  COMPLAINT
+  FOLLOW_UP
+  PAYMENT
+  RENEWAL
+  NOTE
+  STATUS_CHANGE
+  LEAD_CONVERTED
+}
+
+// ─── Branch ──────────────────────────────────────────────
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  customers     Customer[]
+  leads         Lead[]
+  quotations    Quotation[]
+  jobs          Job[]
+  pricingRules  PricingRule[]
+  areaTiers     AreaTier[]
+  inventoryItems InventoryItem[]
+
+  @@map("branches")
+}
+
+// ─── User ────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  fullName       String
+  phone          String?
+  role           UserRole
+  isActive       Boolean  @default(true)
+  refreshToken   String?
+  branchId       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  branch         Branch?       @relation(fields: [branchId], references: [id])
+  createdLeads   Lead[]        @relation("LeadAssignedTo")
+  quotations     Quotation[]   @relation("QuotationCreatedBy")
+  approvedQuotes Quotation[]   @relation("QuotationApprovedBy")
+  assignedJobs   Job[]         @relation("JobTechnician")
+  createdJobs    Job[]         @relation("JobCreatedBy")
+  serviceReports ServiceReport[]
+  activityLogs   ActivityLog[]
+
+  @@map("users")
+}
+
+// ─── Customer ────────────────────────────────────────────
+
+model Customer {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  companyName   String?
+  contactPerson String
+  phone         String
+  email         String?
+  address       String
+  propertyType  PropertyType   @default(RESIDENTIAL)
+  industry      String?
+  gpsLat        Float?
+  gpsLng        Float?
+  source        LeadSource?
+  status        CustomerStatus @default(ACTIVE)
+  notes         String?
+  branchId      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  leads         Lead[]
+  quotations    Quotation[]
+  jobs          Job[]
+  activityLogs  ActivityLog[]
+
+  @@map("customers")
+}
+
+// ─── Lead ────────────────────────────────────────────────
+
+model Lead {
+  id            String     @id @default(uuid())
+  contactPerson String
+  companyName   String?
+  phone         String
+  email         String?
+  address       String?
+  propertyType  PropertyType @default(RESIDENTIAL)
+  source        LeadSource @default(OTHER)
+  stage         LeadStage  @default(NEW_LEAD)
+  notes         String?
+  estimatedValue Float?
+  assignedToId  String?
+  customerId    String?
+  branchId      String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  assignedTo    User?      @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  branch        Branch     @relation(fields: [branchId], references: [id])
+
+  @@map("leads")
+}
+
+// ─── Quotation ───────────────────────────────────────────
+
+model Quotation {
+  id              String          @id @default(uuid())
+  code            String          @unique
+  customerId      String
+  subtotal        Float           @default(0)
+  discount        Float           @default(0)
+  discountPercent Float           @default(0)
+  logisticsFee    Float           @default(0)
+  tax             Float           @default(0)
+  finalTotal      Float           @default(0)
+  costTotal       Float           @default(0)
+  gmPercent       Float           @default(0)
+  status          QuotationStatus @default(DRAFT)
+  validUntil      DateTime?
+  notes           String?
+  rejectionReason String?
+  createdById     String
+  approvedById    String?
+  branchId        String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  createdBy       User            @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  approvedBy      User?           @relation("QuotationApprovedBy", fields: [approvedById], references: [id])
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  items           QuotationItem[]
+  jobs            Job[]
+
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id            String      @id @default(uuid())
+  quotationId   String
+  serviceType   String
+  description   String?
+  pricingType   PricingType @default(FIXED)
+  quantity      Float       @default(1)
+  unitPrice     Float       @default(0)
+  area          Float?
+  frequency     Int         @default(1)
+  subtotal      Float       @default(0)
+  costPerUnit   Float       @default(0)
+  costTotal     Float       @default(0)
+  sortOrder     Int         @default(0)
+
+  quotation     Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_items")
+}
+
+// ─── Pricing ─────────────────────────────────────────────
+
+model PricingRule {
+  id              String      @id @default(uuid())
+  serviceType     String
+  pricingType     PricingType
+  description     String?
+  baseRate        Float       @default(0)
+  minimumPrice    Float       @default(0)
+  costRate        Float       @default(0)
+  isActive        Boolean     @default(true)
+  branchId        String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  branch          Branch?     @relation(fields: [branchId], references: [id])
+
+  @@unique([serviceType, branchId])
+  @@map("pricing_rules")
+}
+
+model AreaTier {
+  id            String   @id @default(uuid())
+  serviceType   String
+  minArea       Float
+  maxArea       Float?
+  ratePerSqft   Float
+  branchId      String?
+  createdAt     DateTime @default(now())
+
+  branch        Branch?  @relation(fields: [branchId], references: [id])
+
+  @@map("area_tiers")
+}
+
+// ─── Job ─────────────────────────────────────────────────
+
+model Job {
+  id                String             @id @default(uuid())
+  code              String             @unique
+  customerId        String
+  quotationId       String?
+  technicianId      String?
+  scheduledDate     DateTime
+  scheduledEndDate  DateTime?
+  status            JobStatus          @default(SCHEDULED)
+  priority          JobPriority        @default(NORMAL)
+  serviceType       String?
+  description       String?
+  address           String?
+  isRecurring       Boolean            @default(false)
+  recurringFrequency RecurringFrequency?
+  parentJobId       String?
+  createdById       String
+  branchId          String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  quotation         Quotation?         @relation(fields: [quotationId], references: [id])
+  technician        User?              @relation("JobTechnician", fields: [technicianId], references: [id])
+  createdBy         User               @relation("JobCreatedBy", fields: [createdById], references: [id])
+  branch            Branch             @relation(fields: [branchId], references: [id])
+  parentJob         Job?               @relation("RecurringJobs", fields: [parentJobId], references: [id])
+  childJobs         Job[]              @relation("RecurringJobs")
+  serviceReport     ServiceReport?
+
+  @@map("jobs")
+}
+
+// ─── Service Report ──────────────────────────────────────
+
+model ServiceReport {
+  id              String   @id @default(uuid())
+  jobId           String   @unique
+  findings        String?
+  recommendations String?
+  chemicalsUsed   String?
+  checklistData   Json?
+  photos          String[]
+  technicianId    String
+  customerSignature String?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  job             Job      @relation(fields: [jobId], references: [id])
+  technician      User     @relation(fields: [technicianId], references: [id])
+
+  @@map("service_reports")
+}
+
+// ─── Inventory ───────────────────────────────────────────
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  quantity    Float    @default(0)
+  unit        String
+  minStock    Float    @default(0)
+  expiryDate  DateTime?
+  branchId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch      Branch   @relation(fields: [branchId], references: [id])
+
+  @@map("inventory_items")
+}
+
+// ─── Activity Log ────────────────────────────────────────
+
+model ActivityLog {
+  id          String       @id @default(uuid())
+  customerId  String
+  type        ActivityType
+  title       String
+  description String?
+  metadata    Json?
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@map("activity_logs")
+}

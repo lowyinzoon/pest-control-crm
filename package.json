@@ -1,0 +1,20 @@
+{
+  "name": "pest-control-crm",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=@pestcontrol/api",
+    "dev:admin": "turbo dev --filter=@pestcontrol/admin",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @pestcontrol/api prisma:generate",
+    "db:migrate": "pnpm --filter @pestcontrol/api prisma:migrate",
+    "db:seed": "pnpm --filter @pestcontrol/api prisma:seed",
+    "db:studio": "pnpm --filter @pestcontrol/api prisma:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
